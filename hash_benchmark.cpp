@@ -23,12 +23,6 @@ enum algorithm {
 	SHA224,
 };
 
-// Information about an algorithm
-struct algorithm_info {
-	const char *name;
-	hash_fn hash;
-};
-
 // Print the error message and exit with a failure
 [[noreturn]] void die(const char *msg);
 
@@ -54,15 +48,12 @@ const char tab = '\t';
 
 const char *program_name = "hash_benchmark";
 
-const char *runner_name[] = {
-	/* [SERIAL_RUNNER} = */ "serial",
+const char *algorithm_name[] = {
+	/* [SHA224] = */ "sha224",
 };
 
-const struct algorithm_info algorithms[] = {
-	/* [SHA224] = */ {
-		.name = "sha224",
-		.hash = sha224,
-	},
+const char *runner_name[] = {
+	/* [SERIAL_RUNNER} = */ "serial",
 };
 
 [[noreturn]] void
@@ -77,19 +68,15 @@ usage()
 {
 	std::cout << "usage: " << program_name << " <num_hashes> <algorithm> <runner>";
 	std::cout << std::endl;
-	std::cout << "algorithms:";
-	for (size_t i = 0; i < LEN(algorithms); i++)
-		std::cout << " " << algorithms[i].name;
-	std::cout << std::endl;
-	std::cout << "runners: serial" << std::endl;
+	std::cout << "algorithms: sha224" << std::endl;
+	std::cout << "runners: serial host-sycl" << std::endl;
 }
 
 std::optional<algorithm>
 get_algorithm(char *name)
 {
-	for (size_t i = 0; i < LEN(algorithms); i++) {
-		if (std::strcmp(algorithms[i].name, name) == 0)
-			return std::optional((algorithm)i);
+	if (std::strcmp(name, "sha224") == 0) {
+		return std::optional(SHA224);
 	}
 	return std::optional<algorithm>();
 }
@@ -122,10 +109,15 @@ extract_or_die(std::optional<T> o, const char *msg)
 }
 
 std::string
-run_hash(u64 i, hash_fn f)
+run_hash(u64 i, algorithm alg)
 {
 	std::string input = std::to_string(i);
-	std::string output = f(input);
+	std::string output;
+	switch (alg) {
+	case SHA224:
+		output = sha224(input);
+		break;
+	}
 	return output;
 }
 
@@ -145,7 +137,7 @@ main(int argc, char *argv[])
 		"third argument must be a known runner");
 
 	std::cout << "hashes =" << tab << num_hashes << tab;
-	std::cout << "algo =" << tab << algorithms[alg].name << tab;
+	std::cout << "algo =" << tab << algorithm_name[alg] << tab;
 	std::cout << "runner =" << tab << runner_name[r] << tab;
 
 	using namespace std::chrono;
@@ -155,7 +147,8 @@ main(int argc, char *argv[])
 	switch (r) {
 	case SERIAL_RUNNER:
 		for (u64 i = 0; i < num_hashes; i++)
-			run_hash(i, algorithms[alg].hash);
+			run_hash(i, alg);
+		break;
 	}
 
 	auto end_time = high_resolution_clock::now();
