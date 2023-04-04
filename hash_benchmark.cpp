@@ -39,7 +39,7 @@ std::optional<u64> get_number(char *str);
 std::optional<runner> get_runner(char *str);
 
 // Run an iteration of the loop
-std::string run_hash(u64 i, hash_fn f);
+void run_hash(u64 i, algorithm f, char *output_buf);
 
 // Take the value or die with message
 template<class T> T extract_or_die(std::optional<T> o, const char *msg);
@@ -108,17 +108,16 @@ extract_or_die(std::optional<T> o, const char *msg)
 	die(msg);
 }
 
-std::string
-run_hash(u64 i, algorithm alg)
+void
+run_hash(u64 i, algorithm alg, unsigned char *output_buf)
 {
 	std::string input = std::to_string(i);
-	std::string output;
-	switch (alg) {
-	case SHA224:
-		output = sha224(input);
-		break;
+	if (alg == SHA224) {
+		class SHA224 ctx{};
+		ctx.init();
+		ctx.update((unsigned char *)input.c_str(), input.length());
+		ctx.final(output_buf + i * SHA224::DIGEST_SIZE);	
 	}
-	return output;
 }
 
 int
@@ -142,12 +141,14 @@ main(int argc, char *argv[])
 
 	using namespace std::chrono;
 
+	unsigned char *output_buffer = new unsigned char[num_hashes * SHA224::DIGEST_SIZE];
+
 	auto start_time = high_resolution_clock::now();
 
 	switch (r) {
 	case SERIAL_RUNNER:
 		for (u64 i = 0; i < num_hashes; i++)
-			run_hash(i, alg);
+			run_hash(i, alg, output_buffer);
 		break;
 	}
 
@@ -157,6 +158,8 @@ main(int argc, char *argv[])
 	double elapsed = elapsed_duration.count();
 
 	std::cout << "elapsed (s) =" << tab << elapsed << std::endl;
+
+	delete[] output_buffer;
 
 	return 0;
 }
