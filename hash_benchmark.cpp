@@ -47,7 +47,7 @@ const char tab = '\t';
 const char *program_name = "hash_benchmark";
 
 const struct algorithm_info algorithms[] = {
-	[SHA224] = {
+	/* [SHA224] = */ {
 		.name = "sha224",
 		.hash = sha224,
 	},

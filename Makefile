@@ -3,8 +3,10 @@ program := hash_benchmark
 objects := $(sources:cpp=o)
 depends := $(sources:cpp=d)
 
-CXX := g++
-CXXFLAGS := -std=c++17 -Wall -g
+CC = icx
+CFLAGS := -Rno-debug-disables-optimization
+CXX := icpx
+CXXFLAGS := -std=c++17 -Wall -g -Rno-debug-disables-optimization
 CPPFLAGS :=
 LDLIBS := -lstdc++
 LDFLAGS :=
@@ -12,7 +14,7 @@ LDFLAGS :=
 all: $(program)
 
 clean:
-	$(RM) $(program) $(depends)
+	$(RM) $(program) $(depends) $(objects)
 
 .PHONY: all clean
 
