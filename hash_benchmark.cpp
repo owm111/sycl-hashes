@@ -111,11 +111,10 @@ extract_or_die(std::optional<T> o, const char *msg)
 void
 run_hash(u64 i, algorithm alg, unsigned char *output_buf)
 {
-	std::string input = std::to_string(i);
 	if (alg == SHA224) {
 		class SHA224 ctx{};
 		ctx.init();
-		ctx.update((unsigned char *)input.c_str(), input.length());
+		ctx.update((unsigned char *)&i, sizeof(i));
 		ctx.final(output_buf + i * SHA224::DIGEST_SIZE);	
 	}
 }
