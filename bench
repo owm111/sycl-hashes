@@ -1,0 +1,17 @@
+#!/bin/sh
+
+iterations=5
+num_hashes=$((1 << 28))
+num_hashes_serial=$((1 << 22))
+
+for x in $(seq $iterations)
+do
+	for hash in sha224
+	do
+		./hash_benchmark $num_hashes_serial $hash serial
+		for runner in sycl-cpu sycl-gpu
+		do
+			./hash_benchmark $num_hashes $hash $runner
+		done
+	done
+done | cut -f 2,4,6,8 | tee benchout-$(date '+%F-%T').tsv
