@@ -19,6 +19,7 @@ typedef std::string (*hash_fn)(std::string);
 enum runner {
 	SERIAL_RUNNER,
 	SYCL_CPU_RUNNER,
+	SYCL_GPU_RUNNER,
 };
 
 // Supported algorithms
@@ -62,6 +63,7 @@ const char *algorithm_name[] = {
 const char *runner_name[] = {
 	/* [SERIAL_RUNNER] = */ "serial",
 	/* [SYCL_CPU_RUNNER] = */ "sycl-cpu",
+	/* [SYCL_GPU_RUNNER] = */ "sycl-gpu",
 };
 
 [[noreturn]] void
@@ -77,7 +79,7 @@ usage()
 	std::cout << "usage: " << program_name << " <num_hashes> <algorithm> <runner>";
 	std::cout << std::endl;
 	std::cout << "algorithms: sha224" << std::endl;
-	std::cout << "runners: serial sycl-cpu" << std::endl;
+	std::cout << "runners: serial sycl-cpu sycl-gpu" << std::endl;
 }
 
 std::optional<algorithm>
@@ -96,6 +98,9 @@ get_runner(char *name)
 		return std::optional(SERIAL_RUNNER);
 	}
 	if (std::strcmp(name, "sycl-cpu") == 0) {
+		return std::optional(SYCL_CPU_RUNNER);
+	}
+	if (std::strcmp(name, "sycl-gpu") == 0) {
 		return std::optional(SYCL_CPU_RUNNER);
 	}
 	return std::optional<runner>();
@@ -175,6 +180,10 @@ main(int argc, char *argv[])
 		break;
 	case SYCL_CPU_RUNNER:
 		run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
+				output_buffer);
+		break;
+	case SYCL_GPU_RUNNER:
+		run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
 				output_buffer);
 		break;
 	}
