@@ -1,3 +1,4 @@
+#include <sycl/sycl.hpp>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <iostream>
 
 #include "sha224.hpp"
+#include "sha224.cpp"
 
 #define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -16,6 +18,7 @@ typedef std::string (*hash_fn)(std::string);
 // Supported runners
 enum runner {
 	SERIAL_RUNNER,
+	SYCL_CPU_RUNNER,
 };
 
 // Supported algorithms
@@ -41,6 +44,10 @@ std::optional<runner> get_runner(char *str);
 // Run an iteration of the loop
 void run_hash(u64 i, algorithm f, char *output_buf);
 
+// Run many iterations with SYCL
+template<class Selector> void run_hashes_sycl(u64 iterations, hash_fn f,
+	Selector selector, unsigned char *output_buf);
+
 // Take the value or die with message
 template<class T> T extract_or_die(std::optional<T> o, const char *msg);
 
@@ -53,7 +60,8 @@ const char *algorithm_name[] = {
 };
 
 const char *runner_name[] = {
-	/* [SERIAL_RUNNER} = */ "serial",
+	/* [SERIAL_RUNNER] = */ "serial",
+	/* [SYCL_CPU_RUNNER] = */ "sycl-cpu",
 };
 
 [[noreturn]] void
@@ -69,7 +77,7 @@ usage()
 	std::cout << "usage: " << program_name << " <num_hashes> <algorithm> <runner>";
 	std::cout << std::endl;
 	std::cout << "algorithms: sha224" << std::endl;
-	std::cout << "runners: serial host-sycl" << std::endl;
+	std::cout << "runners: serial sycl-cpu" << std::endl;
 }
 
 std::optional<algorithm>
@@ -86,6 +94,9 @@ get_runner(char *name)
 {
 	if (std::strcmp(name, "serial") == 0) {
 		return std::optional(SERIAL_RUNNER);
+	}
+	if (std::strcmp(name, "sycl-cpu") == 0) {
+		return std::optional(SYCL_CPU_RUNNER);
 	}
 	return std::optional<runner>();
 }
@@ -119,6 +130,19 @@ run_hash(u64 i, algorithm alg, unsigned char *output_buf)
 	}
 }
 
+template<class Selector> void
+run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
+		unsigned char *output_buf)
+{
+	sycl::queue q(selector);
+	size_t siz = iterations * SHA224::DIGEST_SIZE;
+	unsigned char *sycl_buf = sycl::malloc_device<unsigned char>(siz, q);
+	q.parallel_for(iterations, [=] (sycl::id<1> idx) {
+		run_hash(idx, alg, sycl_buf);
+	});
+	q.wait();
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -148,6 +172,10 @@ main(int argc, char *argv[])
 	case SERIAL_RUNNER:
 		for (u64 i = 0; i < num_hashes; i++)
 			run_hash(i, alg, output_buffer);
+		break;
+	case SYCL_CPU_RUNNER:
+		run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
+				output_buffer);
 		break;
 	}
 

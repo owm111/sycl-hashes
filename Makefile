@@ -1,15 +1,17 @@
-sources := hash_benchmark.cpp sha224.cpp
+sources := hash_benchmark.cpp # sha224.cpp
 program := hash_benchmark
 objects := $(sources:cpp=o)
 depends := $(sources:cpp=d)
 
 CC = icx
-CFLAGS := -Rno-debug-disables-optimization
+CFLAGS := -fsycl -Rno-debug-disables-optimization
 CXX := icpx
-CXXFLAGS := -std=c++17 -Wall -g -Rno-debug-disables-optimization
-CPPFLAGS :=
+CXXFLAGS := -fsycl -std=c++17 -Wall -g -Rno-debug-disables-optimization
+CPPFLAGS := \
+	-I/opt/intel/oneapi/compiler/latest/linux/include \
+	-I/opt/intel/oneapi/compiler/latest/linux/include/sycl
 LDLIBS := -lstdc++
-LDFLAGS :=
+LDFLAGS := -fsycl
 
 all: $(program)
 
