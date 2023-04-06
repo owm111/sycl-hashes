@@ -39,6 +39,9 @@ algorithm parse_arg_algorithm(char **argv, int argidx);
 u64 parse_arg_u64(char **argv, int argidx);
 runner parse_arg_runner(char **arg, int argidx);
 
+// Return the runtime in seconds of the block of code.
+template<class F> double time_execution(F f);
+
 // Run an iteration of the loop
 void run_hash(u64 i, algorithm f, char *output_buf);
 
@@ -116,6 +119,17 @@ parse_arg_u64(char **argv, int i)
 	return result;
 }
 
+template<class F> double
+time_execution(F f)
+{
+	using namespace std::chrono;
+	auto start_time = high_resolution_clock::now();
+	f();
+	auto end_time = high_resolution_clock::now();
+	duration<double> elapsed = end_time - start_time;
+	return elapsed.count();
+}
+
 void
 run_hash(u64 i, algorithm alg, unsigned char *output_buf)
 {
@@ -146,7 +160,7 @@ main(int argc, char *argv[])
 {
 	bool print_hashes = false;
 	program_name = argv[0];
-	if (strcmp(argv[1], "-p") == 0) {
+	if (std::strcmp(argv[1], "-p") == 0) {
 		print_hashes = true;
 		argv++;
 		argv[0] = (char *)program_name;
@@ -164,31 +178,24 @@ main(int argc, char *argv[])
 	std::cout << "algo =" << tab << algorithm_name[alg] << tab;
 	std::cout << "runner =" << tab << runner_name[r] << tab;
 
-	using namespace std::chrono;
-
 	unsigned char *output_buffer = new unsigned char[num_hashes * SHA224::DIGEST_SIZE];
 
-	auto start_time = high_resolution_clock::now();
-
-	switch (r) {
-	case SERIAL_RUNNER:
-		for (u64 i = 0; i < num_hashes; i++)
-			run_hash(i, alg, output_buffer);
-		break;
-	case SYCL_CPU_RUNNER:
-		run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
-				output_buffer);
-		break;
-	case SYCL_GPU_RUNNER:
-		run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
-				output_buffer);
-		break;
-	}
-
-	auto end_time = high_resolution_clock::now();
-
-	duration<double> elapsed_duration = end_time - start_time;
-	double elapsed = elapsed_duration.count();
+	double elapsed = time_execution([&] () {
+		switch (r) {
+		case SERIAL_RUNNER:
+			for (u64 i = 0; i < num_hashes; i++)
+				run_hash(i, alg, output_buffer);
+			break;
+		case SYCL_CPU_RUNNER:
+			run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
+					output_buffer);
+			break;
+		case SYCL_GPU_RUNNER:
+			run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
+					output_buffer);
+			break;
+		}
+	});
 
 	std::cout << "elapsed (s) =" << tab << elapsed << std::endl;
 
