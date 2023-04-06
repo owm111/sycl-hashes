@@ -100,7 +100,7 @@ get_runner(char *name)
 		return std::optional(SYCL_CPU_RUNNER);
 	}
 	if (std::strcmp(name, "sycl-gpu") == 0) {
-		return std::optional(SYCL_CPU_RUNNER);
+		return std::optional(SYCL_GPU_RUNNER);
 	}
 	return std::optional<runner>();
 }
