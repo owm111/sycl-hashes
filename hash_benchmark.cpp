@@ -1,19 +1,12 @@
 #include <sycl/sycl.hpp>
-#include <cstdlib>
-#include <cstring>
 #include <chrono>
 #include <string>
-#include <optional>
 #include <iostream>
 #include <iomanip>
 
 #include "sha224.hpp"
 
-#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
-
 typedef uint64_t u64;
-
-typedef std::string (*hash_fn)(std::string);
 
 // Supported runners
 enum runner {
@@ -46,7 +39,7 @@ template<class F> double time_execution(F f);
 void run_hash(u64 i, algorithm f, char *output_buf);
 
 // Run many iterations with SYCL
-template<class Selector> void run_hashes_sycl(u64 iterations, hash_fn f,
+template<class Selector> void run_hashes_sycl(u64 iterations, algorithm f,
 	Selector selector, unsigned char *output_buf);
 
 const char tab = '\t';
