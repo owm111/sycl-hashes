@@ -1,6 +1,7 @@
 #ifndef SHA224_H
 #define SHA224_H
 #include <string>
+#include <sycl/sycl.hpp>
  
 class SHA224
 {
@@ -13,9 +14,9 @@ protected:
     static const unsigned int SHA224_256_BLOCK_SIZE = (512/8);
  
 public:
-    void init();
-    void update(const unsigned char *message, unsigned int len);
-    void final(unsigned char *digest);
+    SYCL_EXTERNAL void init();
+    SYCL_EXTERNAL void update(const unsigned char *message, unsigned int len);
+    SYCL_EXTERNAL void final(unsigned char *digest);
     static const unsigned int DIGEST_SIZE = ( 224 / 8);
  
 protected:

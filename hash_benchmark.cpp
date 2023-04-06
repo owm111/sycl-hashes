@@ -7,7 +7,6 @@
 #include <iostream>
 
 #include "sha224.hpp"
-#include "sha224.cpp"
 
 #define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 

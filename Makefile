@@ -1,4 +1,4 @@
-sources := hash_benchmark.cpp # sha224.cpp
+sources := hash_benchmark.cpp sha224.cpp
 program := hash_benchmark
 objects := $(sources:cpp=o)
 depends := $(sources:cpp=d)
