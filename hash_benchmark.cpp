@@ -133,10 +133,11 @@ run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
 	sycl::queue q(selector);
 	size_t siz = iterations * SHA224::DIGEST_SIZE;
 	unsigned char *sycl_buf = sycl::malloc_device<unsigned char>(siz, q);
-	q.parallel_for(iterations, [=] (sycl::id<1> idx) {
+	sycl::event hashes_ev = q.parallel_for(iterations, [=] (sycl::id<1> idx) {
 		run_hash(idx, alg, sycl_buf);
 	});
-	q.wait();
+	sycl::event copy_ev = q.memcpy(output_buf, sycl_buf, siz, hashes_ev);
+	copy_ev.wait();
 }
 
 int
