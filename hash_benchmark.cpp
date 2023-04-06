@@ -5,6 +5,7 @@
 #include <string>
 #include <optional>
 #include <iostream>
+#include <iomanip>
 
 #include "sha224.hpp"
 
@@ -143,7 +144,14 @@ run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
 int
 main(int argc, char *argv[])
 {
+	bool print_hashes = false;
 	program_name = argv[0];
+	if (strcmp(argv[1], "-p") == 0) {
+		print_hashes = true;
+		argv++;
+		argv[0] = (char *)program_name;
+		argc--;
+	}
 	if (argc != 4) {
 		usage();
 		return 1;
@@ -183,6 +191,17 @@ main(int argc, char *argv[])
 	double elapsed = elapsed_duration.count();
 
 	std::cout << "elapsed (s) =" << tab << elapsed << std::endl;
+
+	if (print_hashes) {
+		for (u64 i = 0; i < num_hashes; i++) {
+			auto oldfill = std::cerr.fill('0');
+			std::cerr << "- " << std::hex;
+			for (u64 j = 0; j < SHA224::DIGEST_SIZE; j++) {
+				std::cerr << std::setw(2) << (int)output_buffer[i * SHA224::DIGEST_SIZE + j];
+			}
+			std::cerr << std::endl << std::dec << std::setfill(oldfill);
+		}
+	}
 
 	delete[] output_buffer;
 
