@@ -166,49 +166,53 @@ main(int argc, char *argv[])
 		argv[0] = (char *)program_name;
 		argc--;
 	}
-	if (argc != 4) {
+	if (argc != 5) {
 		usage();
 		return 1;
 	}
 	u64 num_hashes = parse_arg_u64(argv, 1);
-	algorithm alg = parse_arg_algorithm(argv, 2);
-	runner r = parse_arg_runner(argv, 3);
+	u64 num_blocks = parse_arg_u64(argv, 2);
+	algorithm alg = parse_arg_algorithm(argv, 3);
+	runner r = parse_arg_runner(argv, 4);
 
-	std::cout << "hashes =" << tab << num_hashes << tab;
+	std::cout << "hashes_per_block =" << tab << num_hashes << tab;
+	std::cout << "num_blocks =" << tab << num_blocks << tab;
 	std::cout << "algo =" << tab << algorithm_name[alg] << tab;
 	std::cout << "runner =" << tab << runner_name[r] << tab;
 
 	unsigned char *output_buffer = new unsigned char[num_hashes * SHA224::DIGEST_SIZE];
 
 	double elapsed = time_execution([&] () {
-		switch (r) {
-		case SERIAL_RUNNER:
-			for (u64 i = 0; i < num_hashes; i++)
-				run_hash(i, alg, output_buffer);
-			break;
-		case SYCL_CPU_RUNNER:
-			run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
-					output_buffer);
-			break;
-		case SYCL_GPU_RUNNER:
-			run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
-					output_buffer);
-			break;
+		for (u64 j = 0; j < num_blocks; j++) {
+			switch (r) {
+			case SERIAL_RUNNER:
+				for (u64 i = 0; i < num_hashes; i++)
+					run_hash(i, alg, output_buffer);
+				break;
+			case SYCL_CPU_RUNNER:
+				run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
+						output_buffer);
+				break;
+			case SYCL_GPU_RUNNER:
+				run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
+						output_buffer);
+				break;
+			}
+			if (print_hashes) {
+				for (u64 i = 0; i < num_hashes; i++) {
+					auto oldfill = std::cerr.fill('0');
+					std::cerr << "- " << std::hex;
+					for (u64 j = 0; j < SHA224::DIGEST_SIZE; j++) {
+						std::cerr << std::setw(2);
+						std::cerr << (int)output_buffer[i * SHA224::DIGEST_SIZE + j];
+					}
+					std::cerr << std::endl << std::dec << std::setfill(oldfill);
+				}
+			}
 		}
 	});
 
 	std::cout << "elapsed (s) =" << tab << elapsed << std::endl;
-
-	if (print_hashes) {
-		for (u64 i = 0; i < num_hashes; i++) {
-			auto oldfill = std::cerr.fill('0');
-			std::cerr << "- " << std::hex;
-			for (u64 j = 0; j < SHA224::DIGEST_SIZE; j++) {
-				std::cerr << std::setw(2) << (int)output_buffer[i * SHA224::DIGEST_SIZE + j];
-			}
-			std::cerr << std::endl << std::dec << std::setfill(oldfill);
-		}
-	}
 
 	delete[] output_buffer;
 
