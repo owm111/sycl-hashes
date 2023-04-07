@@ -1,3 +1,4 @@
+#include <boost/format.hpp>
 #include <sycl/sycl.hpp>
 #include <chrono>
 #include <string>
@@ -20,9 +21,23 @@ enum algorithm {
 	SHA224,
 };
 
+// Wrapper for printing a hash in hexadecimal.
+class hash_hex {
+public:
+	// Use the hash at base
+	hash_hex(unsigned char *base, size_t bytes);
+	// If base is an array of hashes, use the ith hash.
+	hash_hex(unsigned char *base, size_t i, size_t bytes);
+	friend std::ostream& operator<<(std::ostream&, const hash_hex&);
+private:
+	unsigned char *base;
+	size_t bytes;
+};
+
 // Print the error message and exit with a failure
 [[noreturn]] void die(const char *msg);
 [[noreturn]] void die(const std::string& msg);
+[[noreturn]] void die(const boost::format& fmt);
 
 // Print usage info to standard output
 void usage();
@@ -42,7 +57,8 @@ void run_hash(u64 i, algorithm f, char *output_buf);
 template<class Selector> void run_hashes_sycl(u64 iterations, algorithm f,
 	Selector selector, unsigned char *output_buf);
 
-const char tab = '\t';
+// Print out the hash.
+std::ostream& operator<<(std::ostream&, const hash_hex&);
 
 const char *program_name = "hash_benchmark";
 
@@ -56,10 +72,21 @@ const char *runner_name[] = {
 	/* [SYCL_GPU_RUNNER] = */ "sycl-gpu",
 };
 
+const boost::format output_fmt("hashes_per_block =\t%d\tnum_blocks =\t%d\t"
+	"algo =\t%s\trunner =\t%s\telapsed (s) =\t%f\n");
+const boost::format hex_fmt("%02x");
+const boost::format hash_fmt("- %x\n");
+const boost::format die_fmt("%s: %s\n");
+const boost::format usage_fmt("usage: %s <hashes_per_block> <num_blocks> "
+	"<algorithm> <runner>\n"
+	"algorithms: sha224\n"
+	"runners: serial sycl-cpu sycl-gpu\n");
+const boost::format arg_err_fmt("argument %d should be %s");
+
 [[noreturn]] void
 die(const char *msg)
 {
-	std::cerr << program_name << ": " << msg << std::endl;
+	std::cerr << boost::format(die_fmt) % program_name % msg;
 	std::exit(1);
 }
 
@@ -69,13 +96,16 @@ die(const std::string& msg)
 	die(msg.c_str());
 }
 
+[[noreturn]] void
+die(const boost::format& fmt)
+{
+	die(fmt.str());
+}
+
 void
 usage()
 {
-	std::cout << "usage: " << program_name << " <num_hashes> <algorithm> <runner>";
-	std::cout << std::endl;
-	std::cout << "algorithms: sha224" << std::endl;
-	std::cout << "runners: serial sycl-cpu sycl-gpu" << std::endl;
+	std::cout << boost::format(usage_fmt) % program_name;
 }
 
 algorithm
@@ -84,7 +114,7 @@ parse_arg_algorithm(char **argv, int i)
 	if (std::strcmp(argv[i], "sha224") == 0) {
 		return SHA224;
 	}
-	die("argument " + std::to_string(i) + " should be a known hash algorithm");
+	die(boost::format(arg_err_fmt) % i % "a known hash algorithm");
 }
 
 runner
@@ -99,7 +129,7 @@ parse_arg_runner(char **argv, int i)
 	if (std::strcmp(argv[i], "sycl-gpu") == 0) {
 		return SYCL_GPU_RUNNER;
 	}
-	die("argument " + std::to_string(i) + " should be a known runner");
+	die(boost::format(arg_err_fmt) % i % "a known runner");
 }
 
 u64
@@ -108,7 +138,7 @@ parse_arg_u64(char **argv, int i)
 	char *end;
 	u64 result = std::strtoull(argv[i], &end, 0);
 	if (*end != '\0')
-		die("argument " + std::to_string(i) + " should be an natural number");
+		die(boost::format(arg_err_fmt) % i % "a natural number");
 	return result;
 }
 
@@ -148,6 +178,26 @@ run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
 	copy_ev.wait();
 }
 
+hash_hex::hash_hex(unsigned char *base, size_t bytes):
+	base(base), bytes(bytes)
+{
+	// nothing
+}
+
+hash_hex::hash_hex(unsigned char *base, size_t idx, size_t bytes):
+	base(base + bytes * idx), bytes(bytes)
+{
+	// nothing
+}
+
+std::ostream&
+operator<<(std::ostream& str, const hash_hex& hash)
+{
+	for (u64 i = 0; i < hash.bytes; i++)
+		str << boost::format(hex_fmt) % (unsigned)hash.base[i];
+	return str;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -167,11 +217,6 @@ main(int argc, char *argv[])
 	u64 num_blocks = parse_arg_u64(argv, 2);
 	algorithm alg = parse_arg_algorithm(argv, 3);
 	runner r = parse_arg_runner(argv, 4);
-
-	std::cout << "hashes_per_block =" << tab << num_hashes << tab;
-	std::cout << "num_blocks =" << tab << num_blocks << tab;
-	std::cout << "algo =" << tab << algorithm_name[alg] << tab;
-	std::cout << "runner =" << tab << runner_name[r] << tab;
 
 	unsigned char *output_buffer = new unsigned char[num_hashes * SHA224::DIGEST_SIZE];
 
@@ -193,19 +238,16 @@ main(int argc, char *argv[])
 			}
 			if (print_hashes) {
 				for (u64 i = 0; i < num_hashes; i++) {
-					auto oldfill = std::cerr.fill('0');
-					std::cerr << "- " << std::hex;
-					for (u64 j = 0; j < SHA224::DIGEST_SIZE; j++) {
-						std::cerr << std::setw(2);
-						std::cerr << (int)output_buffer[i * SHA224::DIGEST_SIZE + j];
-					}
-					std::cerr << std::endl << std::dec << std::setfill(oldfill);
+					std::cerr << boost::format(hash_fmt) %
+						hash_hex(output_buffer, i,
+						SHA224::DIGEST_SIZE);
 				}
 			}
 		}
 	});
 
-	std::cout << "elapsed (s) =" << tab << elapsed << std::endl;
+	std::cout << boost::format(output_fmt) % num_hashes % num_blocks %
+		algorithm_name[alg] % runner_name[r] % elapsed;
 
 	delete[] output_buffer;
 
