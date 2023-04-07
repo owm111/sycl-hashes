@@ -203,7 +203,7 @@ main(int argc, char *argv[])
 {
 	bool print_hashes = false;
 	program_name = argv[0];
-	if (std::strcmp(argv[1], "-p") == 0) {
+	if (argc > 2 && std::strcmp(argv[1], "-p") == 0) {
 		print_hashes = true;
 		argv++;
 		argv[0] = (char *)program_name;
