@@ -54,8 +54,9 @@ template<class F> double time_execution(F f);
 void run_hash(u64 i, algorithm f, char *output_buf);
 
 // Run many iterations with SYCL
-template<class Selector> void run_hashes_sycl(u64 iterations, algorithm f,
-	Selector selector, unsigned char *output_buf);
+template<class Selector, class Sink> void run_hashes_sycl(u64 iterations,
+	u64 num_blocks, algorithm f, Selector selector,
+	unsigned char *output_buf, Sink sink);
 
 // Print out the hash.
 std::ostream& operator<<(std::ostream&, const hash_hex&);
@@ -168,18 +169,22 @@ run_hash(u64 i, algorithm alg, unsigned char *output_buf)
 	}
 }
 
-template<class Selector> void
-run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
-		unsigned char *output_buf)
+template<class Selector, class Sink> void
+run_hashes_sycl(u64 iterations, u64 num_blocks, algorithm alg,
+		Selector selector, unsigned char *output_buf, Sink sink)
 {
-	sycl::queue q(selector);
+	using sycl::event, sycl::id, sycl::malloc_device, sycl::queue;
+	queue q(selector);
 	size_t siz = iterations * digest_size[alg];
-	unsigned char *sycl_buf = sycl::malloc_device<unsigned char>(siz, q);
-	sycl::event hashes_ev = q.parallel_for(iterations, [=] (sycl::id<1> idx) {
-		run_hash(idx, alg, sycl_buf);
-	});
-	sycl::event copy_ev = q.memcpy(output_buf, sycl_buf, siz, hashes_ev);
-	copy_ev.wait();
+	unsigned char *sycl_buf = malloc_device<unsigned char>(siz, q);
+	for (u64 i = 0; i < num_blocks; i++) {
+		event hashes_ev = q.parallel_for(iterations, [=] (id<1> idx) {
+			run_hash(idx, alg, sycl_buf);
+		});
+		event copy_ev = q.memcpy(output_buf, sycl_buf, siz, hashes_ev);
+		copy_ev.wait();
+		sink();
+	}
 }
 
 hash_hex::hash_hex(unsigned char *base, size_t bytes):
@@ -223,30 +228,34 @@ main(int argc, char *argv[])
 	runner r = parse_arg_runner(argv, 4);
 
 	unsigned char *output_buffer = new unsigned char[num_hashes * digest_size[alg]];
+	auto sink_hashes = [&] () {
+		if (print_hashes)
+			for (u64 i = 0; i < num_hashes; i++)
+				std::cerr << boost::format(hash_fmt) %
+					hash_hex(output_buffer, i,
+					digest_size[alg]);
+	};
 
 	double elapsed = time_execution([&] () {
-		for (u64 j = 0; j < num_blocks; j++) {
-			switch (r) {
-			case SERIAL_RUNNER:
-				for (u64 i = 0; i < num_hashes; i++)
-					run_hash(i, alg, output_buffer);
-				break;
-			case SYCL_CPU_RUNNER:
-				run_hashes_sycl(num_hashes, alg, sycl::cpu_selector_v,
-						output_buffer);
-				break;
-			case SYCL_GPU_RUNNER:
-				run_hashes_sycl(num_hashes, alg, sycl::gpu_selector_v,
-						output_buffer);
-				break;
+		switch (r) {
+		case SERIAL_RUNNER:
+			for (u64 i = 0; i < num_hashes * num_blocks; i++) {
+				if (i % num_hashes == 0 && i > 0)
+					sink_hashes();
+				run_hash(i % num_hashes, alg, output_buffer);
 			}
-			if (print_hashes) {
-				for (u64 i = 0; i < num_hashes; i++) {
-					std::cerr << boost::format(hash_fmt) %
-						hash_hex(output_buffer, i,
-						digest_size[alg]);
-				}
-			}
+			sink_hashes();
+			break;
+		case SYCL_CPU_RUNNER:
+			run_hashes_sycl(num_hashes, num_blocks, alg,
+					sycl::cpu_selector_v, output_buffer,
+					sink_hashes);
+			break;
+		case SYCL_GPU_RUNNER:
+			run_hashes_sycl(num_hashes, num_blocks, alg,
+					sycl::gpu_selector_v, output_buffer,
+					sink_hashes);
+			break;
 		}
 	});
 
