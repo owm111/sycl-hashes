@@ -52,7 +52,7 @@ runner parse_arg_runner(char **arg, int argidx);
 template<class F> double time_execution(F f);
 
 // Run an iteration of the loop
-void run_hash(u64 i, algorithm f, u8 *output_buf);
+void run_hash(u64 input, u64 slot, algorithm f, u8 *output_buf);
 
 // Run many iterations with SYCL
 template<class Selector, class Sink> void run_hashes_sycl(u64 iterations,
@@ -160,13 +160,13 @@ time_execution(F f)
 }
 
 void
-run_hash(u64 i, algorithm alg, u8 *output_buf)
+run_hash(u64 input, u64 slot, algorithm alg, u8 *output_buf)
 {
 	if (alg == SHA224) {
 		class SHA224 ctx{};
 		ctx.init();
-		ctx.update((u8 *)&i, sizeof(i));
-		ctx.final(output_buf + i * SHA224::DIGEST_SIZE);	
+		ctx.update((u8 *)&input, sizeof(input));
+		ctx.final(output_buf + slot * SHA224::DIGEST_SIZE);
 	}
 }
 
@@ -179,8 +179,9 @@ run_hashes_sycl(u64 iterations, u64 num_blocks, algorithm alg,
 	size_t siz = iterations * digest_size[alg];
 	u8 *sycl_buf = malloc_device<u8>(siz, q);
 	for (u64 i = 0; i < num_blocks; i++) {
+		u64 base = i * iterations;
 		event hashes_ev = q.parallel_for(iterations, [=] (id<1> idx) {
-			run_hash(idx, alg, sycl_buf);
+			run_hash(base + idx, idx, alg, sycl_buf);
 		});
 		event copy_ev = q.memcpy(output_buf, sycl_buf, siz, hashes_ev);
 		copy_ev.wait();
@@ -243,7 +244,7 @@ main(int argc, char *argv[])
 			for (u64 i = 0; i < num_hashes * num_blocks; i++) {
 				if (i % num_hashes == 0 && i > 0)
 					sink_hashes();
-				run_hash(i % num_hashes, alg, output_buffer);
+				run_hash(i, i % num_hashes, alg, output_buffer);
 			}
 			sink_hashes();
 			break;
