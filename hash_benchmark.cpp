@@ -7,6 +7,7 @@
 
 #include "sha224.hpp"
 
+typedef uint8_t u8;
 typedef uint64_t u64;
 
 // Supported runners
@@ -25,12 +26,12 @@ enum algorithm {
 class hash_hex {
 public:
 	// Use the hash at base
-	hash_hex(unsigned char *base, size_t bytes);
+	hash_hex(u8 *base, size_t bytes);
 	// If base is an array of hashes, use the ith hash.
-	hash_hex(unsigned char *base, size_t i, size_t bytes);
+	hash_hex(u8 *base, size_t i, size_t bytes);
 	friend std::ostream& operator<<(std::ostream&, const hash_hex&);
 private:
-	unsigned char *base;
+	u8 *base;
 	size_t bytes;
 };
 
@@ -51,12 +52,12 @@ runner parse_arg_runner(char **arg, int argidx);
 template<class F> double time_execution(F f);
 
 // Run an iteration of the loop
-void run_hash(u64 i, algorithm f, char *output_buf);
+void run_hash(u64 i, algorithm f, u8 *output_buf);
 
 // Run many iterations with SYCL
 template<class Selector, class Sink> void run_hashes_sycl(u64 iterations,
 	u64 num_blocks, algorithm f, Selector selector,
-	unsigned char *output_buf, Sink sink);
+	u8 *output_buf, Sink sink);
 
 // Print out the hash.
 std::ostream& operator<<(std::ostream&, const hash_hex&);
@@ -159,24 +160,24 @@ time_execution(F f)
 }
 
 void
-run_hash(u64 i, algorithm alg, unsigned char *output_buf)
+run_hash(u64 i, algorithm alg, u8 *output_buf)
 {
 	if (alg == SHA224) {
 		class SHA224 ctx{};
 		ctx.init();
-		ctx.update((unsigned char *)&i, sizeof(i));
+		ctx.update((u8 *)&i, sizeof(i));
 		ctx.final(output_buf + i * SHA224::DIGEST_SIZE);	
 	}
 }
 
 template<class Selector, class Sink> void
 run_hashes_sycl(u64 iterations, u64 num_blocks, algorithm alg,
-		Selector selector, unsigned char *output_buf, Sink sink)
+		Selector selector, u8 *output_buf, Sink sink)
 {
 	using sycl::event, sycl::id, sycl::malloc_device, sycl::queue;
 	queue q(selector);
 	size_t siz = iterations * digest_size[alg];
-	unsigned char *sycl_buf = malloc_device<unsigned char>(siz, q);
+	u8 *sycl_buf = malloc_device<u8>(siz, q);
 	for (u64 i = 0; i < num_blocks; i++) {
 		event hashes_ev = q.parallel_for(iterations, [=] (id<1> idx) {
 			run_hash(idx, alg, sycl_buf);
@@ -187,13 +188,13 @@ run_hashes_sycl(u64 iterations, u64 num_blocks, algorithm alg,
 	}
 }
 
-hash_hex::hash_hex(unsigned char *base, size_t bytes):
+hash_hex::hash_hex(u8 *base, size_t bytes):
 	base(base), bytes(bytes)
 {
 	// nothing
 }
 
-hash_hex::hash_hex(unsigned char *base, size_t idx, size_t bytes):
+hash_hex::hash_hex(u8 *base, size_t idx, size_t bytes):
 	base(base + bytes * idx), bytes(bytes)
 {
 	// nothing
@@ -227,7 +228,7 @@ main(int argc, char *argv[])
 	algorithm alg = parse_arg_algorithm(argv, 3);
 	runner r = parse_arg_runner(argv, 4);
 
-	unsigned char *output_buffer = new unsigned char[num_hashes * digest_size[alg]];
+	u8 *output_buffer = new u8[num_hashes * digest_size[alg]];
 	auto sink_hashes = [&] () {
 		if (print_hashes)
 			for (u64 i = 0; i < num_hashes; i++)
