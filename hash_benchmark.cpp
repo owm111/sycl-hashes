@@ -66,6 +66,10 @@ const char *algorithm_name[] = {
 	/* [SHA224] = */ "sha224",
 };
 
+const size_t digest_size[] = {
+	/* [SHA224] = */ SHA224::DIGEST_SIZE,
+};
+
 const char *runner_name[] = {
 	/* [SERIAL_RUNNER] = */ "serial",
 	/* [SYCL_CPU_RUNNER] = */ "sycl-cpu",
@@ -169,7 +173,7 @@ run_hashes_sycl(u64 iterations, algorithm alg, Selector selector,
 		unsigned char *output_buf)
 {
 	sycl::queue q(selector);
-	size_t siz = iterations * SHA224::DIGEST_SIZE;
+	size_t siz = iterations * digest_size[alg];
 	unsigned char *sycl_buf = sycl::malloc_device<unsigned char>(siz, q);
 	sycl::event hashes_ev = q.parallel_for(iterations, [=] (sycl::id<1> idx) {
 		run_hash(idx, alg, sycl_buf);
@@ -218,7 +222,7 @@ main(int argc, char *argv[])
 	algorithm alg = parse_arg_algorithm(argv, 3);
 	runner r = parse_arg_runner(argv, 4);
 
-	unsigned char *output_buffer = new unsigned char[num_hashes * SHA224::DIGEST_SIZE];
+	unsigned char *output_buffer = new unsigned char[num_hashes * digest_size[alg]];
 
 	double elapsed = time_execution([&] () {
 		for (u64 j = 0; j < num_blocks; j++) {
@@ -240,7 +244,7 @@ main(int argc, char *argv[])
 				for (u64 i = 0; i < num_hashes; i++) {
 					std::cerr << boost::format(hash_fmt) %
 						hash_hex(output_buffer, i,
-						SHA224::DIGEST_SIZE);
+						digest_size[alg]);
 				}
 			}
 		}
