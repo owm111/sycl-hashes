@@ -56,7 +56,7 @@ void run_hash(u64 input, u64 slot, algorithm f, u8 *output_buf);
 
 // Run many iterations with SYCL
 template<class Selector, class Sink> void run_hashes_sycl(u64 iterations,
-	u64 num_blocks, algorithm f, Selector selector,
+	u64 num_blocks, algorithm f, Selector selector, const char *name,
 	u8 *output_buf, Sink sink);
 
 // Print out the hash.
@@ -88,6 +88,8 @@ const boost::format usage_fmt("usage: %s <hashes_per_block> <num_blocks> "
 	"algorithms: sha224\n"
 	"runners: serial sycl-cpu sycl-gpu\n");
 const boost::format arg_err_fmt("argument %d should be %s");
+const boost::format malloc_err_fmt("malloc_device return a null pointer after "
+	"trying to allocate a %dB buffer (%d hashes x %dB/hash) on %s");
 
 [[noreturn]] void
 die(const char *msg)
@@ -172,12 +174,15 @@ run_hash(u64 input, u64 slot, algorithm alg, u8 *output_buf)
 
 template<class Selector, class Sink> void
 run_hashes_sycl(u64 iterations, u64 num_blocks, algorithm alg,
-		Selector selector, u8 *output_buf, Sink sink)
+		Selector selector, const char *name, u8 *output_buf, Sink sink)
 {
 	using sycl::event, sycl::id, sycl::malloc_device, sycl::queue;
 	queue q(selector);
 	size_t siz = iterations * digest_size[alg];
 	u8 *sycl_buf = malloc_device<u8>(siz, q);
+	if (sycl_buf == nullptr)
+		die(boost::format(malloc_err_fmt) % siz % iterations
+				% digest_size[alg] % name);
 	for (u64 i = 0; i < num_blocks; i++) {
 		u64 base = i * iterations;
 		event hashes_ev = q.parallel_for(iterations, [=] (id<1> idx) {
@@ -250,13 +255,13 @@ main(int argc, char *argv[])
 			break;
 		case SYCL_CPU_RUNNER:
 			run_hashes_sycl(num_hashes, num_blocks, alg,
-					sycl::cpu_selector_v, output_buffer,
-					sink_hashes);
+					sycl::cpu_selector_v, "cpu",
+					output_buffer, sink_hashes);
 			break;
 		case SYCL_GPU_RUNNER:
 			run_hashes_sycl(num_hashes, num_blocks, alg,
-					sycl::gpu_selector_v, output_buffer,
-					sink_hashes);
+					sycl::gpu_selector_v, "gpu",
+					output_buffer, sink_hashes);
 			break;
 		}
 	});
