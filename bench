@@ -1,19 +1,38 @@
 #!/bin/sh
 
-iterations=5
-num_hashes=$((1 << 20))
-num_hashes_serial=$((1 << 20))
-num_blocks=64
-num_blocks_serial=1
+# where data will be saved
+output=benchout-$(date '+%F-%T').tsv
 
-for x in $(seq $iterations)
+# the log_2 of the number of hashes to generate
+total_hashes=30
+
+# the amount of datapoints to collect
+points=9
+
+# the largest block size allowed
+maximum=$total_hashes
+
+# the smallest block size allowed
+minimum=12
+
+# the difference at each step
+step_size=$(((maximum - minimum) / points))
+
+# alert the user if these parameters seem off
+if [ $((step_size * points + minimum)) != $maximum ]
+then
+	echo The number of data points is not a divisor of the range >&2
+	echo As a result, the maximum block size will not be used >&2
+fi
+
+echo hashes per block,number of blocks,hash algorithm,runner,time \
+	| tr , '\t' | tee "$output"
+
+for per_block in $(seq $minimum $step_size $maximum)
 do
-	for hash in sha224
+	num_blocks=$((total_hashes - per_block))
+	for runner in sycl-cpu sycl-gpu
 	do
-		./hash_benchmark $num_hashes_serial $num_blocks_serial $hash serial
-		for runner in sycl-cpu sycl-gpu
-		do
-			./hash_benchmark $num_hashes $num_blocks $hash $runner
-		done
+		./hash_benchmark $((1 << per_block)) $((1 << num_blocks)) sha224 $runner
 	done
-done | cut -f 2,4,6,8,10 | tee benchout-$(date '+%F-%T').tsv
+done | cut -f 2,4,6,8,10 | tee -a "$output"
